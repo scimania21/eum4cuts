@@ -17,22 +17,77 @@
         #frame-selection img { box-sizing: border-box; width: 200px; border: 3px solid transparent; border-radius: 10px; cursor: pointer; transition: border-color .3s, transform .3s; background-color: #fff; }
         #frame-selection img:hover { border-color: #27ae60; transform: scale(1.05); }
         #video-container { position: relative; width: 100%; max-width: 500px; margin: 0 auto; }
-        #capture-screen video { width: 100%; border-radius: 10px; background-color: #000; display: block; transform: scaleX(-1); }
-        #countdown-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; justify-content: center; align-items: center; font-size: 150px; font-weight: 700; color: #fff; text-shadow: 2px 2px 8px rgba(0,0,0,.8); -webkit-text-stroke: 2px #000; }
+        
+        #capture-screen video { 
+            width: 100%; 
+            border-radius: 10px; 
+            background-color: #000; 
+            display: block; 
+            /* transform: scaleX(-1); 이 제어는 JS로 이동 */
+        }
+
+        #countdown-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; justify-content: center; align-items: center; font-size: 150px; font-weight: 700; color: #fff; text-shadow: 2px 2px 8px rgba(0,0,0,.8); -webkit-text-stroke: 2px #000; z-index: 20; }
+        
+        /* --- 2. 촬영 진행률 CSS --- */
+        #capture-progress-overlay {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 36px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 1px 1px 4px rgba(0,0,0,.8);
+            -webkit-text-stroke: 1px #000;
+            display: none; /* JS로 제어 */
+            z-index: 10;
+        }
+
         #capture-controls { margin-top: 15px; }
         #stop-capture-btn { background-color: #e74c3c; }
-        #thumbnails { display: flex; flex-wrap: nowrap; gap: 10px; justify-content: flex-start; margin-top: 15px; height: 80px; overflow-y: hidden; overflow-x: auto; padding: 10px; background: #fff; border-radius: 5px; }
-        #thumbnails img { width: 80px; height: 60px; object-fit: cover; border-radius: 5px; flex-shrink: 0; }
         
-        /* --- 수정된 부분: 사진 선택 화면 숨김 --- */
-        #photo-selection { display: none !important; }
+        /* --- 3. 썸네일 컨테이너 CSS --- */
+        #thumbnails {
+            display: flex;
+            flex-wrap: wrap; /* 래핑 허용 */
+            gap: 10px;
+            justify-content: center; /* 중앙 정렬 */
+            margin-top: 15px;
+            min-height: 80px;
+            height: auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+        }
+
+        /* 썸네일 슬롯 (placeholder) */
+        .thumbnail-slot {
+            width: 80px;
+            height: 60px;
+            background-color: #eee;
+            border-radius: 5px;
+            border: 2px dashed #ccc;
+            flex-shrink: 0;
+            box-sizing: border-box; 
+        }
+
+        /* 썸네일 슬롯에 채워진 이미지 */
+        .thumbnail-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 3px;
+            display: block;
+        }
+
+        #photo-selection { display: none !important; } /* 사진 선택 화면 숨김 유지 */
         
-        #photo-selection .photo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin: 20px 0; }
-        #photo-selection .photo-item img { width: 100%; border-radius: 5px; display: block; border: 4px solid transparent; cursor: pointer; transition: border-color .2s; }
-        #photo-selection .photo-item img.selected { border-color: #27ae60; }
         #editor-screen canvas { border: 2px solid #ccc; border-radius: 5px; cursor: grab; max-width: 100%; height: auto; touch-action: none; }
         .instructions { background-color: #e8f8f5; border: 1px solid #a3e4d7; color: #138d75; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .footer { margin-top: 40px; font-size: 14px; color: #888; }
+        
+        /* --- 1. 카메라 선택 CSS --- */
+        #camera-controls { margin-bottom: 10px; }
+        #camera-select { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -58,11 +113,18 @@
     </div>
 
     <div id="capture-screen" class="screen">
-        <h2>📷 사진 촬영 (<span id="capture-count">0</span> / <span id="required-photos-capture-count">0</span>)</h2>
-        <p class="instructions">프레임에 필요한 <b id="required-photos-capture-text">0</b>장의 사진을 촬영합니다.</p>
+        <h2>📷 사진 촬영 (<span id="capture-count">0</span>/<span id="required-capture-count">0</span>)</h2>
+        <p class="instructions">프레임에 필요한 <b id="required-photos-count-capture">0</b>장의 사진을 촬영합니다.</p>
+        
+        <div id="camera-controls">
+            <label for="camera-select">카메라 선택: </label>
+            <select id="camera-select"></select>
+        </div>
+
         <div id="video-container">
             <video id="webcam" autoplay playsinline></video>
             <div id="countdown-overlay"></div>
+            <div id="capture-progress-overlay"></div>
         </div>
         <div id="capture-controls">
             <button id="manual-capture-btn">수동촬영</button>
@@ -71,7 +133,7 @@
             <button id="auto-capture-5s-btn">5초 자동촬영</button>
             <button id="stop-capture-btn" style="display:none">촬영 중지</button>
         </div>
-        <button id="next-to-selection-btn" disabled style="display: none;">사진 선택하기</button>
+        <button id="next-to-selection-btn" disabled style="display:none;">사진 선택하기</button>
         <h3>촬영된 사진 목록</h3>
         <div id="thumbnails"></div>
     </div>
@@ -83,14 +145,13 @@
         <button id="next-to-editor-btn">편집 화면으로</button>
     </div>
 
-
     <div id="editor-screen" class="screen">
         <h2>🎨 사진 편집</h2>
         <p class="instructions">사진을 드래그하여 위치를 옮기고, 모서리 핸들이나 단축키(W/A/S/D)로 크기와 방향을 조절하세요.</p>
         <canvas id="canvas"></canvas>
         <div class="controls" style="margin-top:20px">
             <button id="download-btn">이미지 다운로드</button>
-            <button id="print-btn">인쇄하기</button>
+            <button id="redo-capture-btn">다시 촬영</button>
             <button id="restart-btn">처음으로</button>
         </div>
     </div>
@@ -101,17 +162,12 @@
         const screens = document.querySelectorAll('.screen');
         const frameSelectionScreen = document.getElementById('frame-selection');
         const captureScreen = document.getElementById('capture-screen');
-        const photoSelectionScreen = document.getElementById('photo-selection'); // 변수는 유지
+        const photoSelectionScreen = document.getElementById('photo-selection');
         const editorScreen = document.getElementById('editor-screen');
         const webcamElement = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const captureCountSpan = document.getElementById('capture-count');
-        
-        // --- 수정된 부분: 촬영 화면 UI 요소 추가 ---
-        const requiredPhotosCaptureCountSpan = document.getElementById('required-photos-capture-count');
-        const requiredPhotosCaptureText = document.getElementById('required-photos-capture-text');
-        
         const manualCaptureBtn = document.getElementById('manual-capture-btn');
         const autoCapture1sBtn = document.getElementById('auto-capture-1s-btn');
         const autoCapture3sBtn = document.getElementById('auto-capture-3s-btn');
@@ -119,18 +175,17 @@
         const stopCaptureBtn = document.getElementById('stop-capture-btn');
         const countdownOverlay = document.getElementById('countdown-overlay');
         const thumbnailsContainer = document.getElementById('thumbnails');
-        const nextToSelectionBtn = document.getElementById('next-to-selection-btn');
         
-        // --- 수정된 부분: 관련 변수 제거 (혹은 유지) ---
-        // photoSelectionScreen 관련 변수들은 JS 에러 방지를 위해 일단 유지합니다.
-        const photoGridContainer = document.getElementById('photo-grid-container');
-        const requiredPhotosCountSpan = document.getElementById('required-photos-count');
-        const nextToEditorBtn = document.getElementById('next-to-editor-btn');
-
+        // --- 새 변수 추가 ---
+        const captureProgressOverlay = document.getElementById('capture-progress-overlay');
         const downloadBtn = document.getElementById('download-btn');
-        const printBtn = document.getElementById('print-btn');
+        const redoCaptureBtn = document.getElementById('redo-capture-btn'); // 'printBtn' 대신
         const restartBtn = document.getElementById('restart-btn');
         const shutterSound = document.getElementById('shutter-sound');
+        const cameraSelect = document.getElementById('camera-select');
+        const requiredCaptureCountSpan = document.getElementById('required-capture-count');
+        const requiredPhotosCountCapture = document.getElementById('required-photos-count-capture');
+        // --- ---
 
         let state = {
             selectedFrameSrc: null,
@@ -150,6 +205,7 @@
         let autoCaptureTimer = null;
         let countdownInterval = null;
 
+        // --- 이음네컷의 frameSlots 데이터 사용 ---
         const frameSlots = {
             frame_01_slots: [ [0.0636, 0.0466, 0.4224, 0.3989], [0.0636, 0.4659, 0.4224, 0.3989], [0.5137, 0.0466, 0.4224, 0.3989], [0.5137, 0.4659, 0.4224, 0.3989] ],
             frame_02_slots: [ [0.0707, 0.0601, 0.4149, 0.4315], [0.0666, 0.5090, 0.4149, 0.4315], [0.5189, 0.0601, 0.4149, 0.4315], [0.5189, 0.5106, 0.4149, 0.4315] ],
@@ -160,8 +216,8 @@
             frame_07_slots: [ [0.0763, 0.1608, 0.3719, 0.1995], [0.0763, 0.3656, 0.3719, 0.1995], [0.0763, 0.5712, 0.3719, 0.1995], [0.0763, 0.7749, 0.3719, 0.1995], [0.5653, 0.1608, 0.3719, 0.1995], [0.5653, 0.3656, 0.3719, 0.1995], [0.5653, 0.5712, 0.3719, 0.1995], [0.5653, 0.7749, 0.3719, 0.1995] ],
             frame_08_slots: [ [0.0737, 0.0918, 0.8541, 0.2865], [0.0737, 0.3899, 0.8541, 0.2865], [0.0737, 0.6865, 0.8541, 0.2865] ]
         };
+        // --- ---
 
-        // 슬롯 타입 기본값 'square' 설정
         Object.keys(frameSlots).forEach(key => {
             frameSlots[key].forEach(slot => {
                 if (slot.length < 5) {
@@ -180,64 +236,177 @@
                 state.selectedFrameSrc = e.target.dataset.frame;
                 state.selectedFrameType = e.target.dataset.photoSlots;
                 state.requiredPhotos = parseInt(e.target.dataset.photos);
-                startWebcam();
+                // --- 함수명 변경 ---
+                initializeCameraAndList();
             }
         });
 
-        async function startWebcam() {
+        // --- 1, 3, 4. 새 함수: initializeCameraAndList (카메라 목록, 썸네일 슬롯 생성) ---
+        async function initializeCameraAndList() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-                webcamElement.srcObject = stream;
-                
-                // --- 수정된 부분: 촬영 화면 UI 업데이트 ---
-                requiredPhotosCaptureCountSpan.textContent = state.requiredPhotos;
-                requiredPhotosCaptureText.textContent = state.requiredPhotos;
-                captureCountSpan.textContent = "0";
-                nextToSelectionBtn.disabled = true; // 버튼 비활성화 (어차피 숨겨짐)
-                // --- 수정 끝 ---
-
+                // 먼저 권한을 요청하고 기본 스트림을 가져옵니다.
+                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                webcamElement.srcObject = initialStream;
                 showScreen('capture-screen');
+
+                // --- 2. 캡처 진행률 표시 및 초기화 ---
+                captureProgressOverlay.textContent = `0/${state.requiredPhotos}`;
+                captureProgressOverlay.style.display = 'block';
+                // --- ---
+
+                // --- 3. 썸네일 슬롯 생성 ---
+                thumbnailsContainer.innerHTML = ""; // 기존 썸네일/슬롯 비우기
+                for (let i = 0; i < state.requiredPhotos; i++) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'thumbnail-slot';
+                    thumbnailsContainer.appendChild(placeholder);
+                }
+                // --- ---
+
+                // 촬영 UI 텍스트 업데이트
+                requiredCaptureCountSpan.textContent = state.requiredPhotos;
+                requiredPhotosCountCapture.textContent = state.requiredPhotos;
+
+                // --- 1. 카메라 목록 가져오기 ---
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                const currentTrack = initialStream.getVideoTracks()[0];
+                const currentSettings = currentTrack.getSettings();
+                const currentDeviceInUse = currentSettings.deviceId;
+                let isInitialCameraRear = false; 
+
+                cameraSelect.innerHTML = ''; 
+                if (videoDevices.length === 0) {
+                    alert('사용 가능한 카메라가 없습니다.');
+                    return;
+                }
+
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    const label = device.label || `카메라 ${index + 1}`;
+                    option.text = label;
+                    
+                    if (device.deviceId === currentDeviceInUse) {
+                        option.selected = true; 
+                        // 레이블에 'back' 또는 'rear'가 포함되어 있는지 확인 (후면 카메라)
+                        if (label.toLowerCase().includes('back') || label.toLowerCase().includes('rear') || label.toLowerCase().includes('후면')) {
+                            isInitialCameraRear = true;
+                        }
+                    }
+                    cameraSelect.appendChild(option);
+                });
+
+                // --- 1. 미러링 초기 설정 ---
+                if (isInitialCameraRear) {
+                    webcamElement.style.transform = 'scaleX(1)'; // 후면: 원본
+                } else {
+                    webcamElement.style.transform = 'scaleX(-1)'; // 전면: 거울 모드
+                }
+                // --- ---
+
             } catch (err) {
                 console.error("웹캠 접근 오류:", err);
                 alert("웹캠에 접근할 수 없습니다. 카메라 권한을 허용해주세요.\n\n(참고: 이 프로그램은 '서버' 환경에서 실행해야 합니다. 'file://' 경로에서는 작동하지 않습니다.)");
             }
         }
+        // --- ---
 
+        // --- 1. 새 함수: startWebcam (카메라 전환) ---
+        async function startWebcam(deviceId) {
+            try {
+                // 기존 스트림 중지
+                if (webcamElement.srcObject) {
+                    webcamElement.srcObject.getTracks().forEach(track => track.stop());
+                }
+                // 새 카메라로 스트림 시작
+                const constraints = { video: { deviceId: { exact: deviceId } } };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                webcamElement.srcObject = stream;
+
+                // --- 1. 미러링 설정 ---
+                const selectedOption = cameraSelect.options[cameraSelect.selectedIndex];
+                const label = selectedOption.text.toLowerCase();
+                const isRearCamera = label.includes('back') || label.includes('rear') || label.includes('후면');
+
+                if (isRearCamera) {
+                    webcamElement.style.transform = 'scaleX(1)'; // 후면: 원본
+                } else {
+                    webcamElement.style.transform = 'scaleX(-1)'; // 전면: 거울 모드
+                }
+                // --- ---
+
+            } catch (err) {
+                console.error("웹캠 전환 오류:", err);
+                alert("선택한 카메라를 시작할 수 없습니다.");
+            }
+        }
+        // --- ---
+
+        // --- 1. 카메라 선택 이벤트 리스너 ---
+        cameraSelect.addEventListener('change', () => {
+            startWebcam(cameraSelect.value);
+        });
+        // --- ---
+        
+        // --- 2, 3. capturePhoto 함수 수정 (미러링, 썸네일 슬롯) ---
         function capturePhoto() {
-            // --- 수정된 부분: 필요 매수($N)만큼만 촬영 ---
-            if (state.capturedPhotos.length >= state.requiredPhotos) return; 
-
+            if (state.capturedPhotos.length >= state.requiredPhotos) return;
+            
             shutterSound.currentTime = 0;
             shutterSound.play();
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = webcamElement.videoWidth;
             tempCanvas.height = webcamElement.videoHeight;
             const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.translate(tempCanvas.width, 0);
-            tempCtx.scale(-1, 1);
+
+            // --- 2. 미러링(WYSIWYG) 로직: 전면 카메라는 거울 모드(scaleX(-1))로 보임
+            // 캔버스에서 별도 좌우 반전을 하지 *않아야* 보이는 그대로 저장됨.
+            // (기존의 translate/scale 로직을 의도적으로 제거)
             tempCtx.drawImage(webcamElement, 0, 0, tempCanvas.width, tempCanvas.height);
+            // --- ---
+
             const dataUrl = tempCanvas.toDataURL('image/jpeg');
             state.capturedPhotos.push(dataUrl);
             const img = document.createElement('img');
             img.src = dataUrl;
-            thumbnailsContainer.appendChild(img);
+            
+            // --- 3. 썸네일을 슬롯에 추가 ---
+            const slots = thumbnailsContainer.querySelectorAll('.thumbnail-slot');
+            const slotToFill = slots[state.capturedPhotos.length - 1]; // 현재 찍은 사진 인덱스
+            if (slotToFill) {
+                slotToFill.innerHTML = ''; // 슬롯 비우기
+                slotToFill.appendChild(img);
+                slotToFill.style.border = '2px solid #27ae60'; // 채워짐 표시
+            }
+            // --- ---
+
+            // --- 2. 캡처 진행률 텍스트 업데이트 ---
+            captureProgressOverlay.textContent = `${state.capturedPhotos.length}/${state.requiredPhotos}`;
+            // --- ---
+            
             captureCountSpan.textContent = state.capturedPhotos.length;
 
-            // --- 수정된 부분: 촬영 완료시 편집기로 바로 이동 ---
-            if (state.capturedPhotos.length >= state.requiredPhotos) {
-                toggleCaptureButtons(true);
-                stopAutoCapture();
+            // 촬영 완료 시
+            if (state.capturedPhotos.length === state.requiredPhotos) {
+                toggleCaptureButtons(true); 
+                stopAutoCapture(); 
                 
-                // 셔터 소리 재생 후 잠시 뒤에 이동 (0.5초)
-                setTimeout(() => {
-                    if (webcamElement.srcObject) {
-                        webcamElement.srcObject.getTracks().forEach(track => track.stop());
-                    }
-                    initEditor(state.capturedPhotos); // 편집기 함수 직접 호출
-                }, 500);
+                // 카메라 스트림 중지 (배터리 절약)
+                if (webcamElement.srcObject) {
+                    webcamElement.srcObject.getTracks().forEach(track => track.stop());
+                    webcamElement.srcObject = null; 
+                }
+
+                // --- 2. 캡처 완료 시 진행률 숨김 ---
+                captureProgressOverlay.style.display = 'none';
+                // --- ---
+                
+                initEditor(state.capturedPhotos); 
             }
-            // --- 수정 끝 ---
         }
+        // --- ---
 
         function runCountdown(seconds, callback) {
             let count = seconds;
@@ -256,20 +425,18 @@
         }
 
         function startAutoCapture(intervalSeconds) {
-            // --- 수정된 부분: $N장 체크 ---
-            if (state.capturedPhotos.length >= state.requiredPhotos) return;
+            if (state.capturedPhotos.length >= state.requiredPhotos) return; 
             toggleCaptureButtons(true);
             stopCaptureBtn.style.display = 'inline-block';
+            
             const captureLoop = () => {
-                // --- 수정된 부분: $N장 체크 ---
-                if (state.capturedPhotos.length >= state.requiredPhotos) {
+                if (state.capturedPhotos.length >= state.requiredPhotos) { 
                     stopAutoCapture();
                     return;
                 }
                 runCountdown(intervalSeconds, () => {
                     capturePhoto();
-                    // --- 수정된 부분: $N장 체크 ---
-                    if (state.capturedPhotos.length < state.requiredPhotos) {
+                    if (state.capturedPhotos.length < state.requiredPhotos) { 
                         autoCaptureTimer = setTimeout(captureLoop, 1000);
                     }
                 });
@@ -284,7 +451,6 @@
             countdownInterval = null;
             countdownOverlay.style.display = 'none';
             stopCaptureBtn.style.display = 'none';
-            // --- 수정된 부분: $N장 체크 ---
             toggleCaptureButtons(state.capturedPhotos.length >= state.requiredPhotos);
         }
 
@@ -301,13 +467,8 @@
         autoCapture5sBtn.addEventListener('click', () => startAutoCapture(5));
         stopCaptureBtn.addEventListener('click', stopAutoCapture);
 
-        // --- 수정된 부분: 사진 선택 화면 관련 로직 모두 제거 ---
-        // nextToSelectionBtn.addEventListener('click', ...);  <-- 제거
-        // setupPhotoSelection() 함수 <-- 제거
-        // photoGridContainer.addEventListener('click', ...); <-- 제거
-        // nextToEditorBtn.addEventListener('click', ...); <-- 제거
-        
-        function initEditor(selectedPhotos) { // 이제 이 함수가 바로 호출됨
+
+        function initEditor(selectedPhotos) {
             const frameImg = new Image();
             state.frameImage = frameImg;
             frameImg.src = state.selectedFrameSrc;
@@ -315,7 +476,6 @@
                 canvas.width = frameImg.width;
                 canvas.height = frameImg.height;
 
-                // --- 수정된 부분: selectedPhotos는 이제 dataUrl 배열임 ---
                 const photoPromises = selectedPhotos.map(src => new Promise(resolve => {
                     const img = new Image();
                     img.src = src;
@@ -523,7 +683,7 @@
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
             const scaleFactor = 1.05;
-            const rotateAngle = Math.PI / 180 * 5;
+            const rotateAngle = Math.PI / 180 * 5; 
             let needsRedraw = true;
 
             switch(e.key.toLowerCase()) {
@@ -544,6 +704,7 @@
         canvas.addEventListener('mousemove', handlePointerMove);
         canvas.addEventListener('mouseup', handlePointerUp);
         canvas.addEventListener('mouseleave', handlePointerUp);
+
         canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
         canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
         canvas.addEventListener('touchend', handlePointerUp);
@@ -555,42 +716,55 @@
             const now = new Date();
             const timestamp = now.getFullYear().toString() +
                               (now.getMonth() + 1).toString().padStart(2, '0') +
-                              now.getDate().toString().padStart(2, '0') + '-' +
+                              now.getDate().toString().padStart(2, '0') + '_' + // 하이픈 대신 언더스코어
                               now.getHours().toString().padStart(2, '0') +
                               now.getMinutes().toString().padStart(2, '0') +
                               now.getSeconds().toString().padStart(2, '0');
             const link = document.createElement('a');
-            link.download = `ieum-ne-cut-${timestamp}.png`;
+            // --- 다운로드 파일명 수정 ---
+            link.download = `이음텃밭_이음네컷_${timestamp}.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         });
 
-        printBtn.addEventListener('click', () => {
+        // --- 5. "다시 촬영" 버튼 리스너 추가 ---
+        redoCaptureBtn.addEventListener('click', () => {
+            stopAutoCapture(); // 자동 촬영 중지
+
+            // 카메라 스트림이 있으면 중지 (필수는 아니지만 정리)
+            if (webcamElement.srcObject) {
+                webcamElement.srcObject.getTracks().forEach(track => track.stop());
+                webcamElement.srcObject = null; 
+            }
+            
+            // 상태 초기화 (프레임 선택은 유지)
+            state.capturedPhotos = [];
+            state.editedPhotos = [];
+            state.frameImage = null; // 프레임 이미지는 다시 로드됨
+            
             activePhoto = null;
-            drawCanvas();
-            const dataUrl = canvas.toDataURL('image/png');
-            const printWindow = window.open('', '', 'width=800,height=600');
-            printWindow.document.open();
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head><title>Print</title></head>
-                <body onload="window.print(); window.close()">
-                    <img src="${dataUrl}" style="max-width: 100%;">
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
+            isDragging = false;
+            isResizing = false;
+            isRotating = false;
+
+            captureCountSpan.textContent = "0";
+            thumbnailsContainer.innerHTML = ""; // 썸네일 비우기
+            toggleCaptureButtons(false);
+            
+            // 카메라와 썸네일 슬롯을 다시 초기화하고 촬영 화면으로 이동
+            initializeCameraAndList(); 
         });
 
+        // --- "처음으로" 버튼 리스너 수정 ---
         restartBtn.addEventListener('click', () => {
             stopAutoCapture();
             if (webcamElement.srcObject) {
                 webcamElement.srcObject.getTracks().forEach(track => track.stop());
-                webcamElement.srcObject = null;
+                webcamElement.srcObject = null; 
             }
+            // 모든 상태 초기화
             state = {
                 selectedFrameSrc: null,
                 selectedFrameType: null,
@@ -601,15 +775,18 @@
             };
             activePhoto = null;
             isDragging = isResizing = isRotating = false;
-            
-            // --- 수정된 부분: UI 초기화 ---
             captureCountSpan.textContent = "0";
-            if(requiredPhotosCaptureCountSpan) requiredPhotosCaptureCountSpan.textContent = "0";
-            if(requiredPhotosCaptureText) requiredPhotosCaptureText.textContent = "0";
             
+            // --- UI 텍스트 초기화 ---
+            requiredCaptureCountSpan.textContent = "0";
+            requiredPhotosCountCapture.textContent = "0";
+            captureProgressOverlay.style.display = 'none';
+            captureProgressOverlay.textContent = '';
+            // --- ---
+
             toggleCaptureButtons(false);
-            nextToSelectionBtn.disabled = true;
-            thumbnailsContainer.innerHTML = "";
+            
+            thumbnailsContainer.innerHTML = ""; // 썸네일 비우기
             showScreen('frame-selection');
         });
 
